@@ -8,6 +8,8 @@ AWS credentials, no SSH and no bastion.
 
 **Project page:** https://talhaimtiaz09.github.io/immutable-ec2-web-tier/
 
+![Architecture: users reach an ALB in public subnets, which forwards only to the Auto Scaling group in private app subnets, which reaches only RDS Postgres in database subnets. Operators use SSM Session Manager; there is no SSH.](docs/images/ec2-architecture.png)
+
 ## Status
 
 | Part | State |
@@ -33,6 +35,16 @@ docs/index.html   the project page (GitHub Pages); diagrams in docs/images/
 prompts/          ChatGPT prompts for those diagrams
 ```
 
+## Release flow
+
+A release is a pull request that changes one line, `ami_id` in
+`envs/lab/lab.tfvars`. CI plans it with a read-only role; after review, the
+apply role (gated by the `lab` GitHub Environment) creates a new launch template
+version and `scripts/rollout.sh` refreshes the fleet. Both roles are assumed over
+GitHub OIDC. The image build step is not built yet.
+
+![Release flow: commit, image build, golden AMI tagged with the git SHA, PR bumping ami_id in lab.tfvars, reviewer approval, Terraform creates a new launch template version, instance refresh via rollout.sh. CI reaches AWS through GitHub OIDC with no stored keys.](docs/images/ec2-release-path.png)
+
 ## Why the rollout runs outside Terraform
 
 AWS rolls a failed instance refresh back to the configuration saved on the group
@@ -42,6 +54,8 @@ the ASG ignores launch template changes, Terraform only creates the new version,
 and `scripts/rollout.sh` starts the refresh with that version as
 `DesiredConfiguration`. The group keeps the old version saved until the refresh
 succeeds.
+
+![Left: Terraform's instance_refresh saves v2 on the group first, so when an alarm fires the rollback redeploys the bad AMI. Right: rollout.sh leaves v1 saved, launches v2 beside v1, and an alarm on 5xx or unhealthy hosts rolls back to v1.](docs/images/ec2-refresh-rollback.png)
 
 Setup and CI details: [`terraform/README.md`](terraform/README.md).
 
