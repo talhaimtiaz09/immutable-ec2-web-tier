@@ -29,7 +29,8 @@ terraform/
   envs/lab        wires the modules; ami_id lives in lab.tfvars
 scripts/rollout.sh
 .github/workflows/terraform.yml
-docs/index.html   the project page (GitHub Pages)
+docs/index.html   the project page (GitHub Pages); diagrams in docs/images/
+prompts/          ChatGPT prompts for those diagrams
 ```
 
 ## Why the rollout runs outside Terraform

@@ -4,1088 +4,374 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Immutable EC2 Tier</title>
-<meta name="description" content="Personal DevOps project by Talha Imtiaz: an EC2 web tier released as golden AMIs through ASG instance refresh with alarm-triggered rollback, built in Terraform and applied from CI over GitHub OIDC.">
+<meta name="description" content="Personal AWS lab by Talha Imtiaz: an EC2 web tier released as golden AMIs through an Auto Scaling instance refresh that rolls itself back on a CloudWatch alarm. Terraform, applied from CI over GitHub OIDC.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
 <style>
-/* Layout: a spec sheet. Each section is a two-column band: a narrow label rail
-   on the left (what this is) and the content on the right; diagrams are the
-   widest objects on the page. Stacks to one column under 860px. */
+/* Theme follows talhaimtiaz.me case studies: warm cream canvas, lime accent,
+   Space Grotesk for the hero, Geist for reading. Dark is the site's matte carbon. */
 :root {
-  /* colour: cool drafting-paper neutrals, ink navy, one amber accent for the golden AMI */
-  --bg: #f3f5f7;
-  --surface: #ffffff;
-  --subnet: #e8edf2;
-  --ink: #15212c;
-  --muted: #566573;
-  --line: #d2d9e0;
-  --line-strong: #a9b5c1;
-  --accent: #96590a;
-  --accent-soft: #f6e9d2;
+  --canvas: #f4efe4;
+  --band: #f8f3e8;
+  --surface: #fdfbf5;
+  --surface-muted: #efe8db;
+  --ink: #2b2720;
+  --ink-strong: #1a1610;
+  --muted: #6b6555;
+  --soft: #8c8678;
+  --line: #e0d8c7;
+  --line-strong: #847b66;
+  --accent: #6e8710;
+  --accent-dot: #a7b64e;
+  --code-ink: #5c7010;
   --danger: #a8321f;
-  --danger-soft: #f7e3de;
-  --pending: #5d6b7a;
-  --pending-soft: #e6ebf0;
-  --code-bg: #e9eef3;
 
-  /* type */
-  --f-display: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --f-body: "IBM Plex Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-
-  /* scale */
-  --t-xs: 0.75rem;
-  --t-sm: 0.875rem;
-  --t-md: 1rem;
-  --t-lg: 1.1875rem;
-  --t-xl: 1.625rem;
-  --t-2xl: clamp(2rem, 1.3rem + 3.2vw, 3.5rem);
-
-  --gutter: 16px;
-  --radius: 6px;
+  --f-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Geist", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f151b;
-    --surface: #161f28;
-    --subnet: #1b2631;
-    --ink: #e2e8ee;
-    --muted: #97a5b3;
-    --line: #2a3643;
-    --line-strong: #4a5867;
-    --accent: #e6a94f;
-    --accent-soft: #3a2b14;
-    --danger: #f08470;
-    --danger-soft: #3a1d17;
-    --pending: #a3b0bd;
-    --pending-soft: #222d38;
-    --code-bg: #1a242e;
-    color-scheme: dark;
+    --canvas: #040404;
+    --band: #0f100d;
+    --surface: #131313;
+    --surface-muted: #1e1f1a;
+    --ink: #dcddd3;
+    --ink-strong: #f8f8f4;
+    --muted: #a0a298;
+    --soft: #76786f;
+    --line: #2d2e28;
+    --line-strong: #82847a;
+    --accent: #b8d94a;
+    --accent-dot: #b8c674;
+    --code-ink: #c9e85f;
+    --danger: #e07a64;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f151b;
-  --surface: #161f28;
-  --subnet: #1b2631;
-  --ink: #e2e8ee;
-  --muted: #97a5b3;
-  --line: #2a3643;
-  --line-strong: #4a5867;
-  --accent: #e6a94f;
-  --accent-soft: #3a2b14;
-  --danger: #f08470;
-  --danger-soft: #3a1d17;
-  --pending: #a3b0bd;
-  --pending-soft: #222d38;
-  --code-bg: #1a242e;
-  color-scheme: dark;
+  --canvas: #040404;
+  --band: #0f100d;
+  --surface: #131313;
+  --surface-muted: #1e1f1a;
+  --ink: #dcddd3;
+  --ink-strong: #f8f8f4;
+  --muted: #a0a298;
+  --soft: #76786f;
+  --line: #2d2e28;
+  --line-strong: #82847a;
+  --accent: #b8d94a;
+  --accent-dot: #b8c674;
+  --code-ink: #c9e85f;
+  --danger: #e07a64;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--canvas);
   color: var(--ink);
   font-family: var(--f-body);
-  font-size: var(--t-md);
-  line-height: 1.6;
-  padding-inline: var(--gutter);
+  font-size: 17px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
 }
-img, svg { max-width: 100%; }
-a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
-a:hover { text-decoration-color: var(--accent); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
-code, .mono { font-family: var(--f-mono); font-size: 0.9em; }
-p code, li code, td code, dd code, .card code {
-  background: var(--code-bg);
-  padding: 0.05em 0.35em;
-  border-radius: 4px;
-  overflow-wrap: anywhere;
-}
-h1, h2, h3 { text-wrap: balance; margin: 0; }
-p { margin: 0; }
-ul, ol { margin: 0; padding: 0; }
+::selection { background: var(--accent); color: var(--canvas); }
+a { color: var(--accent); font-weight: 600; text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
-.wrap { max-width: 1120px; margin-inline: auto; }
+.wrap { width: 100%; max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+.read { max-width: 720px; margin: 0 auto; }
+@media (min-width: 640px) { .wrap { padding: 0 40px; } }
 
-/* top bar */
-.topbar {
-  display: flex; flex-wrap: wrap; gap: 8px 20px;
-  justify-content: space-between; align-items: baseline;
-  padding-block: 18px;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--t-sm);
-}
-.topbar .who { font-weight: 600; }
-.topbar .who span { color: var(--muted); font-weight: 400; }
-.topbar nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.topbar nav a { color: var(--muted); text-decoration: none; }
-.topbar nav a:hover { color: var(--ink); }
+/* nav */
+.nav { border-bottom: 1px solid var(--line); }
+.nav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.nav .name { font-family: var(--f-head); font-weight: 700; color: var(--ink-strong); font-size: 16px; }
+.nav ul { display: flex; gap: 20px; list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.nav ul a { color: var(--muted); font-weight: 500; }
+.nav ul a:hover { color: var(--ink-strong); text-decoration: none; }
 
 /* hero */
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: 48px;
-  padding-block: 56px 48px;
-  align-items: start;
+.hero { padding: 56px 0 48px; border-bottom: 1px solid var(--line); }
+@media (min-width: 900px) { .hero { padding: 88px 0 64px; } }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.pill {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  padding: 3px 12px; color: var(--ink);
 }
-.hero > * { min-width: 0; }
-.tag-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
-.badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--f-mono); font-size: var(--t-xs);
-  letter-spacing: 0.06em; text-transform: uppercase;
-  padding: 4px 10px; border-radius: 999px;
-  border: 1px solid var(--line-strong); color: var(--muted);
+h1 {
+  font-family: var(--f-head); font-weight: 700; color: var(--ink-strong);
+  font-size: clamp(2.1rem, 1.3rem + 3.4vw, 3.9rem);
+  line-height: 1.06; letter-spacing: -0.02em;
+  max-width: 900px; margin: 0;
 }
-.badge.personal { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 500; }
-.hero h1 {
-  font-family: var(--f-display);
-  font-weight: 500;
-  font-size: var(--t-2xl);
-  line-height: 1.06;
-  letter-spacing: -0.015em;
-  font-variation-settings: "opsz" 72;
+.summary { margin: 24px 0 0; max-width: 680px; font-size: clamp(1.05rem, 1rem + 0.35vw, 1.25rem); line-height: 1.6; color: var(--muted); }
+.spec {
+  display: grid; gap: 20px; grid-template-columns: 1fr;
+  margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--line); max-width: 800px;
 }
-.hero h1 em { font-style: italic; color: var(--accent); font-weight: 400; }
-.byline { margin-top: 14px; color: var(--muted); font-size: var(--t-sm); }
-.lede { margin-top: 22px; font-size: var(--t-lg); line-height: 1.55; max-width: 62ch; }
-.facts {
-  margin: 28px 0 0; display: grid; gap: 0;
-  border-top: 1px solid var(--line);
-}
-.facts div {
-  display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 12px;
-  padding-block: 10px; border-bottom: 1px solid var(--line);
-}
-.facts dt { font-family: var(--f-mono); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 3px; }
-.facts dd { margin: 0; font-size: var(--t-sm); min-width: 0; }
-.status-line { display: flex; align-items: center; gap: 8px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pending); flex: none; }
-.dot.done { background: var(--accent); }
+@media (min-width: 640px) { .spec { grid-template-columns: 1fr 2fr auto; } }
+.spec dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 6px; }
+.spec dd { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.45; color: var(--ink); }
 
-.links { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 26px; align-items: center; font-size: var(--t-sm); }
-.btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: var(--ink); color: var(--bg);
-  text-decoration: none; font-weight: 500;
-  padding: 10px 16px; border-radius: var(--radius);
-}
-.btn:hover { background: var(--accent); color: var(--bg); }
-.links a:not(.btn) { color: var(--muted); }
-.links a:not(.btn):hover { color: var(--ink); }
-
-.snippet { margin: 0; }
-.snippet figcaption { font-size: var(--t-xs); color: var(--muted); margin-top: 8px; font-family: var(--f-mono); }
-.code {
-  margin: 0;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  font-family: var(--f-mono);
-  font-size: 0.8125rem;
-  line-height: 1.65;
-  overflow-x: auto;
-  color: var(--ink);
-  tab-size: 2;
-}
-.code .c { color: var(--muted); }
-.code .k { color: var(--accent); }
-.code .del { color: var(--danger); }
-.code .add { color: var(--accent); }
-.code-head {
-  display: flex; justify-content: space-between; gap: 12px;
-  font-family: var(--f-mono); font-size: var(--t-xs); color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.stack { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
-.chip {
-  font-family: var(--f-mono); font-size: var(--t-xs);
-  padding: 3px 8px; border-radius: 4px;
-  background: var(--surface); border: 1px solid var(--line);
-  color: var(--ink); white-space: nowrap;
-}
-
-/* sections */
-.band {
-  display: grid;
-  grid-template-columns: 13rem minmax(0, 1fr);
-  gap: 40px;
-  padding-block: 56px;
-  border-top: 1px solid var(--line);
-}
-.band > * { min-width: 0; }
-.rail { position: relative; }
-.rail .eyebrow {
-  font-family: var(--f-mono); font-size: var(--t-xs);
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent);
-  margin-bottom: 10px;
-}
-.rail h2 {
-  font-family: var(--f-display); font-weight: 500;
-  font-size: var(--t-xl); line-height: 1.15;
-  font-variation-settings: "opsz" 36;
-}
-.rail p { margin-top: 12px; font-size: var(--t-sm); color: var(--muted); }
-.prose { max-width: 66ch; }
-.prose p + p { margin-top: 12px; }
-
-/* architecture */
-.arch { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 36px; align-items: start; }
-.arch > * { min-width: 0; }
+/* figures */
 figure { margin: 0; }
-figcaption.cap { font-size: var(--t-sm); color: var(--muted); margin-top: 12px; max-width: 60ch; }
-.diagram { display: block; width: 100%; height: auto; }
-.notes { display: grid; gap: 18px; }
-.notes li { list-style: none; display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 12px; font-size: var(--t-sm); }
-.notes li b { font-family: var(--f-mono); font-weight: 500; font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 2px; }
-
-/* svg diagram classes (styled from the page so both themes apply) */
-.d-vpc { fill: none; stroke: var(--line-strong); stroke-width: 1.25; stroke-dasharray: 6 4; }
-.d-subnet { fill: var(--subnet); }
-.d-box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
-.d-box-ghost { fill: none; stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 4 3; }
-.d-asg { fill: var(--accent-soft); fill-opacity: 0.45; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 5 3; }
-.d-deny { fill: var(--danger-soft); stroke: var(--danger); stroke-width: 1; }
-.d-t { fill: var(--ink); font-family: var(--f-body); font-size: 13px; font-weight: 600; }
-.d-s { fill: var(--muted); font-family: var(--f-mono); font-size: 10.5px; }
-.d-lab { fill: var(--muted); font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; }
-.d-acc { fill: var(--accent); font-family: var(--f-mono); font-size: 10.5px; font-weight: 500; }
-.d-deny-t { fill: var(--danger); font-family: var(--f-mono); font-size: 10px; font-weight: 500; }
-.d-sg { fill: var(--ink); font-family: var(--f-mono); font-size: 10px; }
-.d-line { stroke: var(--ink); stroke-width: 1.4; fill: none; }
-.d-egress { stroke: var(--muted); stroke-width: 1.25; fill: none; stroke-dasharray: 4 3; }
-.d-head { fill: var(--ink); }
-.d-head-muted { fill: var(--muted); }
-
-/* release flow */
-.flow { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
-.flow > * { min-width: 0; }
-.steps { counter-reset: step; display: grid; gap: 0; }
-.steps li {
-  list-style: none; position: relative;
-  padding: 0 0 22px 44px;
+.frame { border: 1px solid var(--line); border-radius: 16px; padding: 8px; background: var(--surface); }
+.frame img { display: block; width: 100%; height: auto; border-radius: 10px; }
+figure.hero-fig { margin-top: 48px; }
+figure.diagram { margin: 40px 0; }
+figcaption { margin-top: 12px; text-align: center; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--soft); }
+/* Until the image file exists, show a labelled slot instead of a broken image. */
+figure.missing img { display: none; }
+figure.missing .frame {
+  aspect-ratio: 3 / 2; border-style: dashed; border-color: var(--line-strong);
+  background: var(--surface-muted); display: grid; place-items: center; padding: 24px; text-align: center;
 }
-.steps li::before {
-  counter-increment: step; content: counter(step);
-  position: absolute; left: 0; top: 0;
-  width: 28px; height: 28px; border-radius: 50%;
-  display: grid; place-items: center;
-  font-family: var(--f-mono); font-size: var(--t-xs); font-weight: 500;
-  background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink);
-}
-.steps li::after {
-  content: ""; position: absolute; left: 13.5px; top: 30px; bottom: 2px;
-  width: 1px; background: var(--line-strong);
-}
-.steps li:last-child::after { display: none; }
-.steps li.key::before { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-.actor { display: block; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: var(--t-xs); color: var(--muted); letter-spacing: 0.02em; }
-.steps h3 { font-family: var(--f-body); font-size: var(--t-md); font-weight: 600; margin-top: 2px; }
-.steps p { font-size: var(--t-sm); margin-top: 4px; color: var(--ink); }
-
-.outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; padding-left: 44px; }
-.outcome { border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
-.outcome .o-label { font-family: var(--f-mono); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; }
-.outcome.ok .o-label { color: var(--muted); }
-.outcome.bad { border-color: var(--danger); }
-.outcome.bad .o-label { color: var(--danger); }
-.outcome h4 { margin: 4px 0 4px; font-size: var(--t-sm); font-weight: 600; }
-.outcome p { font-size: var(--t-sm); color: var(--muted); }
-
-.side { display: grid; gap: 28px; }
-.side h3 { font-family: var(--f-display); font-weight: 500; font-size: var(--t-lg); margin-bottom: 8px; font-variation-settings: "opsz" 24; }
-.side > div > p { font-size: var(--t-sm); color: var(--muted); margin-bottom: 12px; }
-
-.phases { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.phase { border-top: 2px solid var(--line-strong); padding-top: 8px; min-width: 0; }
-.phase .p-name { font-family: var(--f-mono); font-size: var(--t-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.phase .p-boxes { display: grid; gap: 4px; margin-block: 8px; }
-.phase .p-row { display: flex; gap: 4px; min-height: 22px; }
-.inst {
-  font-family: var(--f-mono); font-size: 0.6875rem; line-height: 1;
-  padding: 5px 6px; border-radius: 3px;
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
-}
-.inst.v2 { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.inst.warm { border-style: dashed; }
-.inst.drain { opacity: 0.5; text-decoration: line-through; }
-.phase p { font-size: var(--t-xs); color: var(--muted); line-height: 1.45; }
-
-/* decisions */
-.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 20px 22px; min-width: 0;
-  display: grid; grid-template-rows: auto 1fr; gap: 12px;
-}
-.card h3 { font-family: var(--f-display); font-weight: 500; font-size: var(--t-lg); line-height: 1.25; font-variation-settings: "opsz" 24; }
-.card dl { margin: 0; display: grid; gap: 10px; align-content: start; }
-.card dt { font-family: var(--f-mono); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.card dd { margin: 2px 0 0; font-size: var(--t-sm); }
-.card dd.trade { color: var(--muted); }
-
-/* security */
-.controls { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
-.controls th, .controls td { text-align: left; vertical-align: top; padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); }
-.controls th { width: 34%; font-weight: 600; }
-.controls tr:first-child th, .controls tr:first-child td { border-top: 1px solid var(--ink); }
-
-/* drills */
-.drill-meta { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: baseline; margin-bottom: 18px; font-size: var(--t-sm); color: var(--muted); }
-.drill-meta strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.drills { display: grid; gap: 0; border-top: 1px solid var(--ink); }
-.drill {
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 13rem);
-  gap: 16px;
-  padding-block: 16px;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--t-sm);
-}
-.drill > * { min-width: 0; }
-.drill .num { font-family: var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
-.drill h3 { font-size: var(--t-md); font-weight: 600; font-family: var(--f-body); }
-.drill .scen { color: var(--muted); margin-top: 2px; }
-.drill .lbl { display: block; font-family: var(--f-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 2px; }
-.drill .pass { margin-top: 8px; }
-.result-pending {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--f-mono); font-size: var(--t-xs);
-  padding: 4px 10px; border-radius: 999px;
-  background: var(--pending-soft); color: var(--pending);
-  border: 1px dashed var(--line-strong);
-}
-.result-pending::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid currentColor; }
-.result-pending { white-space: nowrap; }
-.result-note { display: block; margin-top: 6px; color: var(--muted); font-size: var(--t-xs); }
-.result-measured { font-weight: 500; }
-.result-date { display: block; margin-top: 4px; color: var(--muted); font-family: var(--f-mono); font-size: var(--t-xs); }
-.runbook-link { display: inline-block; margin-top: 6px; font-family: var(--f-mono); font-size: var(--t-xs); }
-.honesty { margin-top: 18px; font-size: var(--t-sm); color: var(--muted); max-width: 70ch; }
-
-/* cost */
-.cost-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
-.cost-grid > * { min-width: 0; }
-.tbl { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
-.tbl th, .tbl td { text-align: left; padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-.tbl thead th { font-family: var(--f-mono); font-size: var(--t-xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom-color: var(--ink); }
-.tbl td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; padding-right: 0; }
-.tbl tfoot td { font-weight: 600; border-bottom: none; padding-top: 12px; }
-.tbl-note { font-size: var(--t-xs); color: var(--muted); margin-top: 8px; font-family: var(--f-mono); }
-.ticks { display: grid; gap: 14px; }
-.ticks li { list-style: none; font-size: var(--t-sm); padding-left: 18px; position: relative; }
-.ticks li::before { content: ""; position: absolute; left: 0; top: 0.6em; width: 8px; height: 1.5px; background: var(--accent); }
-.ticks li strong { font-weight: 600; }
-
-/* production */
-.prod { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
-.prod th, .prod td { text-align: left; vertical-align: top; padding: 12px 14px 12px 0; border-bottom: 1px solid var(--line); }
-.prod thead th { font-family: var(--f-mono); font-size: var(--t-xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom-color: var(--ink); }
-.prod td:first-child { color: var(--muted); width: 38%; }
-.prod td:last-child { font-weight: 500; }
-.table-scroll { overflow-x: auto; }
-
-/* repo */
-.repo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
-.repo > * { min-width: 0; }
-
-footer {
-  border-top: 1px solid var(--ink);
-  padding-block: 28px 48px;
-  display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; align-items: baseline;
-  font-size: var(--t-sm);
-}
-footer .name { font-family: var(--f-display); font-size: var(--t-lg); font-weight: 500; }
-footer .name span { display: block; font-family: var(--f-body); font-size: var(--t-sm); color: var(--muted); font-weight: 400; }
-footer nav { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-footer nav a { color: var(--muted); }
-footer .fine { width: 100%; color: var(--muted); font-size: var(--t-xs); font-family: var(--f-mono); }
-
-/* responsive */
-@media (max-width: 1000px) {
-  .hero { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-  .arch { grid-template-columns: minmax(0, 1fr); }
-  .arch figure { max-width: 520px; }
-  .flow { grid-template-columns: minmax(0, 1fr); }
-  .drill { grid-template-columns: 2.25rem minmax(0, 1fr) minmax(0, 1fr); }
-  .drill .res { grid-column: 2 / -1; }
-}
-@media (max-width: 860px) {
-  .band { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 44px; }
-  .cards { grid-template-columns: minmax(0, 1fr); }
-  .cost-grid, .repo { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-}
-@media (max-width: 560px) {
-  .hero { padding-block: 36px 32px; }
-  .facts div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .notes li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .outcomes { grid-template-columns: minmax(0, 1fr); padding-left: 0; }
-  .phases { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 10px; }
-  .drill { grid-template-columns: 1.75rem minmax(0, 1fr); gap: 8px 12px; }
-  .drill .meas, .drill .res { grid-column: 2 / -1; }
-  .controls, .controls tbody, .controls tr, .controls th, .controls td { display: block; width: auto; }
-  .controls th { border-bottom: none; padding-bottom: 2px; }
-  .controls td { padding-top: 0; }
-  .controls tr:first-child td { border-top: none; }
-  .card { padding: 18px; }
+figure.missing .frame::after {
+  content: "Diagram slot · " attr(data-file);
+  font-family: var(--f-mono); font-size: 12px; color: var(--muted);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .btn, .topbar nav a, a { transition: color 0.15s ease, background-color 0.15s ease, text-decoration-color 0.15s ease; }
+/* reading band */
+main { background: var(--band); border-bottom: 1px solid var(--line); padding: 48px 0 72px; }
+@media (min-width: 900px) { main { padding: 80px 0 96px; } }
+.lead { font-size: clamp(1.2rem, 1.1rem + 0.4vw, 1.375rem); line-height: 1.55; color: var(--ink-strong); margin: 0 0 32px; letter-spacing: -0.01em; }
+h2 {
+  font-family: var(--f-body); font-weight: 600; color: var(--ink-strong);
+  font-size: clamp(1.375rem, 1.2rem + 0.8vw, 1.875rem); letter-spacing: -0.015em; line-height: 1.25;
+  margin: 64px 0 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
 }
+h3 { font-weight: 600; font-size: 1.2rem; color: var(--ink-strong); margin: 40px 0 8px; letter-spacing: -0.01em; }
+p { margin: 18px 0; }
+ul.dots { list-style: none; padding: 0; margin: 20px 0; }
+ul.dots li { position: relative; padding-left: 22px; margin: 10px 0; }
+ul.dots li::before { content: ""; position: absolute; left: 2px; top: 0.72em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-dot); }
+code {
+  font-family: var(--f-mono); font-size: 0.86em; font-weight: 500; color: var(--code-ink);
+  background: var(--surface-muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+  overflow-wrap: anywhere;
+}
+strong { color: var(--ink-strong); font-weight: 600; }
 
-@media print {
-  :root { --bg: #ffffff; --surface: #ffffff; --subnet: #f1f3f5; --code-bg: #f1f3f5; color-scheme: light; }
-  body { padding-inline: 0; font-size: 10.5pt; }
-  .topbar nav, .links .btn { display: none; }
-  .band { padding-block: 24px; break-inside: auto; }
-  .card, .drill, .outcome, figure, .steps li, .controls tr { break-inside: avoid; }
-  .hero { padding-block: 16px; }
-  a { text-decoration: none; }
-  .links a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
-}
+/* code block */
+.code { margin: 32px 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
+.code-head { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.code pre { margin: 0; padding: 18px 20px; overflow-x: auto; font-family: var(--f-mono); font-size: 13.5px; line-height: 1.75; color: var(--ink); }
+.code pre .c { color: var(--soft); }
+
+/* decision card (same shape as the site's <Decision>) */
+.decision { margin: 32px 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.decision .tag { padding: 10px 20px; border-bottom: 1px solid var(--line); font-family: var(--f-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.decision .pair { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); }
+@media (min-width: 640px) { .decision .pair { grid-template-columns: 1fr 1fr; } }
+.decision .pair > div { background: var(--surface); padding: 16px 20px; }
+.decision .k { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+.decision .chose .k { color: var(--accent); }
+.decision .over .k { color: var(--soft); }
+.decision .pair p { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.45; }
+.decision .over p { color: var(--muted); }
+.decision .why { border-top: 1px solid var(--line); padding: 14px 20px; margin: 0; font-size: 15px; line-height: 1.7; color: var(--muted); }
+.decision .why strong { color: var(--ink-strong); }
+
+/* status + cost tables */
+.table-wrap { overflow-x: auto; margin: 24px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.5; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+td.num { font-family: var(--f-mono); font-size: 14px; white-space: nowrap; }
+.state { font-weight: 600; width: 45%; }
+.state.done { color: var(--accent); }
+.state.todo { color: var(--soft); }
+.note { font-size: 13px; color: var(--soft); margin-top: -8px; }
+
+/* footer */
+footer { padding: 40px 0 56px; font-size: 14px; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+footer ul { display: flex; flex-wrap: wrap; gap: 20px; list-style: none; margin: 0; padding: 0; }
+footer a { color: var(--muted); font-weight: 500; }
+footer a:hover { color: var(--ink-strong); }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-<header class="topbar">
-  <div class="who">Talha Imtiaz <span>· DevOps Engineer</span></div>
-  <nav aria-label="Sections">
-    <a href="#architecture">Architecture</a>
-    <a href="#release">Release flow</a>
-    <a href="#decisions">Decisions</a>
-    <a href="#drills">Drills</a>
-    <a href="#cost">Cost</a>
-  </nav>
+<nav class="nav" aria-label="Site">
+  <div class="wrap">
+    <a class="name" href="https://talhaimtiaz.me">Talha Imtiaz</a>
+    <ul>
+      <li><a href="https://github.com/talhaimtiaz09/immutable-ec2-web-tier">Repository</a></li>
+      <li><a href="https://talhaimtiaz.me">Portfolio</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="pills">
+      <span class="pill">Personal project</span>
+      <span class="pill">AWS lab</span>
+      <span class="pill">In progress</span>
+    </div>
+    <h1>The Rollback That Redeploys the Bad Release: An Immutable EC2 Tier on AWS</h1>
+    <p class="summary">A small API on an EC2 fleet where servers are never patched. Every change is a new AMI, the Auto Scaling group replaces the fleet behind a load balancer, and a CloudWatch alarm rolls a bad release back. The obvious way to wire that up in Terraform rolls back to the bad AMI. This is how I avoided that.</p>
+    <dl class="spec">
+      <div><dt>Role</dt><dd>DevOps Engineer. Design and all code.</dd></div>
+      <div><dt>Stack</dt><dd>Terraform, EC2 Auto Scaling, ALB, RDS Postgres, Packer, SSM, CloudWatch, GitHub Actions OIDC</dd></div>
+      <div><dt>Code</dt><dd><a href="https://github.com/talhaimtiaz09/immutable-ec2-web-tier">GitHub ↗</a></dd></div>
+    </dl>
+    <figure class="hero-fig">
+      <div class="frame" data-file="images/ec2-architecture.png">
+        <img src="images/ec2-architecture.png" width="1536" height="1024" alt="Architecture: users reach an Application Load Balancer in public subnets. It forwards to an Auto Scaling group of EC2 instances in private subnets, which reach a private RDS Postgres database. Each tier only accepts traffic from the security group of the tier above it. Operators connect through SSM Session Manager; there is no SSH or bastion." onerror="this.closest('figure').classList.add('missing')">
+      </div>
+      <figcaption>Three tiers across two Availability Zones</figcaption>
+    </figure>
+  </div>
 </header>
 
 <main>
+  <div class="wrap"><div class="read">
 
-<section class="hero" aria-labelledby="title">
-  <div>
-    <div class="tag-row">
-      <span class="badge personal">Personal project</span>
-      <span class="badge">AWS · Terraform</span>
+    <p class="lead">My AWS client work is an estate someone else built by hand. This lab starts from an empty account, around one rule: a server is never changed after it boots. A release is a new image, and the fleet gets replaced.</p>
+
+    <h2>The situation</h2>
+    <p>This is a personal lab, not client work. It has no users and no traffic, and nothing on this page is a production claim. I'm building it in public and writing it up as I go, so the table below is the real state of it today.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Part</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td>Terraform: bootstrap, VPC, ALB + ASG, RDS</td><td class="state done">Written, passes fmt, validate, tflint, trivy</td></tr>
+          <tr><td>CI: plan on PR, approved apply, rollout</td><td class="state done">Written, passes actionlint</td></tr>
+          <tr><td><code>scripts/rollout.sh</code></td><td class="state done">Written, passes shellcheck</td></tr>
+          <tr><td>App, Packer + Ansible image build, k6 load test</td><td class="state todo">Not started</td></tr>
+          <tr><td>Failure drills and runbooks</td><td class="state todo">Not run</td></tr>
+        </tbody>
+      </table>
     </div>
-    <h1 id="title">Immutable EC2 Web Tier with <em>Zero-Downtime Rollouts</em></h1>
-    <p class="byline">Talha Imtiaz, DevOps Engineer</p>
-    <p class="lede">A small API on an EC2 fleet where servers are never patched in place. Every change becomes a new golden AMI, the Auto Scaling group replaces the fleet behind a load balancer, and a CloudWatch alarm rolls a bad release back on its own. All of it is Terraform, applied from CI with no static AWS credentials.</p>
 
-    <dl class="facts">
-      <div><dt>Release unit</dt><dd>A Packer-built AMI, tagged with the git SHA</dd></div>
-      <div><dt>Rollout</dt><dd>ASG instance refresh, new capacity before old is removed</dd></div>
-      <div><dt>Rollback</dt><dd>Automatic on a CloudWatch alarm, or <code>git revert</code> of one tfvars line</dd></div>
-      <div><dt>Access</dt><dd>SSM Session Manager only. No SSH, bastion or key pair</dd></div>
-      <div><dt>Verification</dt><dd class="status-line"><span class="dot" id="hero-dot"></span><span id="hero-status">6 failure drills, results published as measured</span></dd></div>
-    </dl>
+    <h2>Why not patch in place</h2>
+    <p>The usual way to run a few EC2 instances is to SSH in and update them. After a few months no two servers are quite the same, and nobody can say exactly what's on them. Undoing a bad change means writing an undo by hand, under pressure.</p>
+    <p>Baking every change into an image fixes that. What was tested is exactly what runs, and rolling back means going back to the previous image. But it raises two new questions: how do you swap the whole fleet without dropping requests, and how do you undo a bad image without someone watching?</p>
 
-    <div class="links">
-      <a class="btn" href="https://github.com/talhaimtiaz09/immutable-ec2-web-tier">View the repository <span aria-hidden="true">→</span></a>
-      <a href="https://talhaimtiaz.me">talhaimtiaz.me</a>
-      <a href="https://github.com/talhaimtiaz09">GitHub</a>
-      <a href="https://linkedin.com/in/talha-imtiaz342">LinkedIn</a>
+    <h2>What I built</h2>
+
+    <h3>Each tier only accepts the one above it</h3>
+    <p>The VPC has three subnet tiers across two Availability Zones. Only the ALB is reachable from the internet. The app security group accepts traffic from the ALB's security group and nothing else, and the database accepts port 5432 from the app's security group and nothing else. The rules reference security groups, not IP ranges, so they stay correct as instances come and go.</p>
+    <p>The fleet is an Auto Scaling group of 2 to 4 <code>t4g.small</code> instances in private subnets. It uses the ALB's health check, so an instance the load balancer considers broken gets replaced, not only one EC2 reports as dead. RDS is not publicly accessible and generates its own master password in Secrets Manager, so there's no password in Terraform state or in a tfvars file.</p>
+
+    <h3>A release is one line in a tfvars file</h3>
+    <p>The AMI ID lives in <code>envs/lab/lab.tfvars</code>, committed to Git. A build opens a pull request that changes that one line. CI runs checks and a <code>terraform plan</code> with a read-only role and posts the plan on the PR. After review and merge, a separate apply role, gated by a required reviewer in a GitHub Environment, applies it. Both roles are assumed over GitHub OIDC, so there are no AWS keys stored in GitHub.</p>
+    <figure class="diagram">
+      <div class="frame" data-file="images/ec2-release-path.png">
+        <img src="images/ec2-release-path.png" width="1536" height="1024" alt="Release path: a commit triggers an image build, which produces a golden AMI tagged with the git SHA. CI opens a pull request that bumps ami_id in lab.tfvars. A reviewer approves the apply, Terraform creates a new launch template version, and an instance refresh replaces the fleet. CI reaches AWS through GitHub OIDC, with no stored keys." loading="lazy" onerror="this.closest('figure').classList.add('missing')">
+      </div>
+      <figcaption>From commit to fleet, with one human approval</figcaption>
+    </figure>
+    <p>The image build stage isn't built yet. Everything from the pull request onward is.</p>
+    <div class="decision">
+      <div class="tag">Engineering decision</div>
+      <div class="pair">
+        <div class="chose"><div class="k">Chose</div><p>A committed AMI ID in tfvars</p></div>
+        <div class="over"><div class="k">Over</div><p>A data source that looks up the latest AMI</p></div>
+      </div>
+      <p class="why"><strong>Why: </strong>A lookup would change the fleet on the next apply with no diff anyone reviewed. A committed ID makes every fleet change a pull request, and rollback is <code>git revert</code>. The cost is one extra PR per image build.</p>
     </div>
-  </div>
 
-  <div>
-    <figure class="snippet">
-      <div class="code-head"><span>scripts/rollout.sh · start-instance-refresh</span><span>JSON</span></div>
-<pre class="code"><span class="c"># the ASG keeps the old version saved until</span>
-<span class="c"># this refresh succeeds, so rollback is real</span>
-{
-  <span class="k">DesiredConfiguration</span>: { LaunchTemplate: {
-    LaunchTemplateId: $lt, Version: $version } },
-  Preferences: {
-    MinHealthyPercentage: <span class="k">100</span>,
-    MaxHealthyPercentage: <span class="k">200</span>,
-    InstanceWarmup: $warmup,
-    AutoRollback: <span class="k">true</span>,
-    AlarmSpecification: { Alarms: [
-      <span class="c">"lab-target-5xx", "lab-unhealthy-hosts"</span> ] }
-  }
+    <h3>The rollback that redeploys the bad release</h3>
+    <p>An Auto Scaling instance refresh can roll itself back. You give it CloudWatch alarms, and if one fires during the refresh, AWS stops and returns the fleet to the configuration that was saved on the group <em>before</em> the refresh started. Here the alarms are target 5xx errors and unhealthy hosts.</p>
+    <p>Terraform's <code>instance_refresh</code> block saves the new launch template version on the group first and then starts the refresh. So when the alarm fires, the "previous" configuration AWS rolls back to is already the new one, and the rollback puts the bad AMI back. It looks like it works until the day you need it.</p>
+    <figure class="diagram">
+      <div class="frame" data-file="images/ec2-refresh-rollback.png">
+        <img src="images/ec2-refresh-rollback.png" width="1536" height="1024" alt="Two rollout paths compared. Rejected: Terraform's instance_refresh saves the new version first, so a rollback redeploys the bad AMI. Chosen: a script starts the refresh with the new version as the desired configuration. New instances launch beside the old ones, and if a CloudWatch alarm fires, Auto Scaling rolls back to the old version." loading="lazy" onerror="this.closest('figure').classList.add('missing')">
+      </div>
+      <figcaption>Where the rollback lands, in each design</figcaption>
+    </figure>
+    <p>So Terraform doesn't start rollouts. It creates the new launch template version and ignores the group's launch template setting. Then <code>scripts/rollout.sh</code> starts the refresh with the new version as the desired configuration. The group keeps the old version saved until the refresh succeeds, so a rollback has somewhere real to go.</p>
+    <div class="code">
+      <div class="code-head"><span>scripts/rollout.sh</span><span>excerpt</span></div>
+<pre><span class="c"># the group keeps the old version saved until this succeeds</span>
+DesiredConfiguration: { LaunchTemplate: {
+  LaunchTemplateId: $lt, Version: $version } },
+Preferences: {
+  MinHealthyPercentage: 100,
+  MaxHealthyPercentage: 200,
+  InstanceWarmup: $warmup,
+  AutoRollback: true,
+  AlarmSpecification: { Alarms: $alarms }
 }</pre>
-      <figcaption>Excerpt from the real script. Alarm names shortened.</figcaption>
-    </figure>
-    <div class="stack" aria-label="Stack">
-      <span class="chip">Terraform</span>
-      <span class="chip">EC2 Auto Scaling</span>
-      <span class="chip">ALB</span>
-      <span class="chip">Packer</span>
-      <span class="chip">Ansible</span>
-      <span class="chip">RDS Postgres</span>
-      <span class="chip">SSM</span>
-      <span class="chip">CloudWatch</span>
-      <span class="chip">KMS</span>
-      <span class="chip">Secrets Manager</span>
-      <span class="chip">GitHub Actions OIDC</span>
     </div>
-  </div>
-</section>
+    <p>Minimum healthy at 100% and maximum at 200% means new instances launch and pass their health check before old ones are removed, so capacity never drops below the desired count. The ALB's deregistration delay is set to cover the app's graceful shutdown, so requests in flight finish before an old instance goes away. If the refresh rolls back, the script fails the CI job, which is the signal to revert the AMI bump so Git matches the fleet again.</p>
+    <div class="decision">
+      <div class="tag">Engineering decision</div>
+      <div class="pair">
+        <div class="chose"><div class="k">Chose</div><p>Start the refresh from a script, outside Terraform</p></div>
+        <div class="over"><div class="k">Over</div><p>Terraform's built-in <code>instance_refresh</code> block</p></div>
+      </div>
+      <p class="why"><strong>Why: </strong>The built-in block saves the new version before the refresh, so its rollback lands on the bad AMI. The cost is that Terraform state no longer shows which version the fleet runs. The group itself and the CI log are the record.</p>
+    </div>
 
-<!-- ARCHITECTURE -->
-<section class="band" id="architecture" aria-labelledby="h-arch">
-  <div class="rail">
-    <div class="eyebrow">Topology</div>
-    <h2 id="h-arch">Architecture</h2>
-    <p>Three subnet tiers across two Availability Zones. Each tier accepts connections only from the security group of the tier above it.</p>
-  </div>
-  <div class="arch">
-    <figure>
-      <svg class="diagram" viewBox="0 0 420 740" role="img" aria-label="VPC with three subnet tiers across two Availability Zones. The internet reaches only the Application Load Balancer in the public subnets. The ALB forwards to an Auto Scaling group of EC2 instances in private app subnets. The app instances reach a private RDS Postgres instance on port 5432. Egress leaves through a single fck-nat instance; S3 is reached through a gateway endpoint. There is no port 22 and access is through SSM.">
-        <defs>
-          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
-          </marker>
-          <marker id="ahm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" class="d-head-muted"/>
-          </marker>
-        </defs>
+    <h3>A health check that can't take down the fleet</h3>
+    <div class="decision">
+      <div class="tag">Engineering decision</div>
+      <div class="pair">
+        <div class="chose"><div class="k">Chose</div><p>A shallow <code>/healthz</code> for the ALB, database checks in <code>/readyz</code> and alarms</p></div>
+        <div class="over"><div class="k">Over</div><p>A deep health check that also checks the database</p></div>
+      </div>
+      <p class="why"><strong>Why: </strong>The group replaces instances the ALB marks unhealthy. If the health check depended on the database, one database blip would mark every instance unhealthy, and Auto Scaling would terminate a fleet that was fine. The cost: an instance that can't reach the database stays in service, and an alarm has to catch it.</p>
+    </div>
 
-        <!-- internet gateway -->
-        <rect x="40" y="8" width="340" height="32" rx="6" class="d-box"/>
-        <text x="210" y="29" text-anchor="middle" class="d-t">Internet gateway</text>
-        <text x="306" y="53" class="d-s">inbound</text>
-        <text x="128" y="53" class="d-s">outbound</text>
+    <h3>No way in except through IAM</h3>
+    <p>No security group opens port 22, the launch template has no key pair, and there's no bastion. Operators use SSM Session Manager, which is authenticated by IAM and logged. Instances require IMDSv2. The instance role can read exactly one secret, the database's, by ARN. Terraform state sits in a versioned, KMS-encrypted S3 bucket with S3's native locking, so there's no DynamoDB lock table.</p>
+    <p>The trade-off is that the shell depends on the SSM agent and an egress path. If the NAT instance is down, so is the shell.</p>
 
-        <!-- VPC -->
-        <rect x="14" y="58" width="392" height="526" rx="10" class="d-vpc"/>
+    <h2>What it costs</h2>
+    <p>I sized it to cost about $2 a day while it's up, and nothing between sessions. <code>envs/lab</code> is destroyed at the end of each session. Only the bootstrap layer stays: the state bucket, the OIDC provider and the CI roles.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Resource</th><th>Approx. per hour</th></tr></thead>
+        <tbody>
+          <tr><td>ALB</td><td class="num">~$0.0225 + LCU</td></tr>
+          <tr><td>2 × EC2 t4g.small</td><td class="num">~$0.034</td></tr>
+          <tr><td>RDS db.t4g.micro</td><td class="num">~$0.016</td></tr>
+          <tr><td>fck-nat on t4g.nano</td><td class="num">~$0.004</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">On-demand list prices used for planning, not a bill.</p>
+    <p>The biggest saving is egress. A managed NAT Gateway costs about $32 a month just to exist, and SSM interface endpoints would add about $7 a month each, per AZ. Packages are baked into the image, so the fleet barely needs the internet. One fck-nat instance and a free S3 gateway endpoint cover it. An AWS Budget alert exists before the first apply.</p>
 
-        <!-- public tier -->
-        <rect x="24" y="70" width="182" height="100" rx="4" class="d-subnet"/>
-        <rect x="214" y="70" width="182" height="100" rx="4" class="d-subnet"/>
-        <text x="32" y="85" class="d-lab">public</text>
-        <text x="222" y="85" class="d-lab">public</text>
-        <rect x="34" y="98" width="104" height="52" rx="5" class="d-box"/>
-        <text x="86" y="120" text-anchor="middle" class="d-t">fck-nat</text>
-        <text x="86" y="138" text-anchor="middle" class="d-s">t4g.nano</text>
-        <rect x="156" y="98" width="230" height="52" rx="5" class="d-box"/>
-        <text x="271" y="120" text-anchor="middle" class="d-t">Application Load Balancer</text>
-        <text x="271" y="138" text-anchor="middle" class="d-s">health check /healthz</text>
-
-        <line x1="300" y1="40" x2="300" y2="96" class="d-line" marker-end="url(#ah)"/>
-        <line x1="122" y1="98" x2="122" y2="42" class="d-egress" marker-end="url(#ahm)"/>
-
-        <!-- SG alb -> app -->
-        <text x="225" y="187" text-anchor="middle" class="d-sg">SG: alb → app</text>
-
-        <!-- app tier -->
-        <rect x="24" y="196" width="182" height="196" rx="4" class="d-subnet"/>
-        <rect x="214" y="196" width="182" height="196" rx="4" class="d-subnet"/>
-        <text x="32" y="211" class="d-lab">private app</text>
-        <text x="222" y="211" class="d-lab">private app</text>
-        <rect x="34" y="220" width="352" height="164" rx="8" class="d-asg"/>
-        <rect x="48" y="238" width="148" height="70" rx="5" class="d-box"/>
-        <text x="122" y="260" text-anchor="middle" class="d-t">EC2 · t4g.small</text>
-        <text x="122" y="277" text-anchor="middle" class="d-acc">golden AMI</text>
-        <text x="122" y="295" text-anchor="middle" class="d-s">IMDSv2 · no key pair</text>
-        <rect x="224" y="238" width="148" height="70" rx="5" class="d-box"/>
-        <text x="298" y="260" text-anchor="middle" class="d-t">EC2 · t4g.small</text>
-        <text x="298" y="277" text-anchor="middle" class="d-acc">golden AMI</text>
-        <text x="298" y="295" text-anchor="middle" class="d-s">IMDSv2 · no key pair</text>
-        <rect x="48" y="322" width="148" height="22" rx="11" class="d-deny"/>
-        <text x="122" y="337" text-anchor="middle" class="d-deny-t">no port 22 · SSM only</text>
-        <text x="48" y="372" class="d-acc">Auto Scaling group · 2 to 4</text>
-
-        <line x1="170" y1="150" x2="170" y2="236" class="d-line" marker-end="url(#ah)"/>
-        <line x1="312" y1="150" x2="312" y2="236" class="d-line" marker-end="url(#ah)"/>
-        <line x1="122" y1="238" x2="122" y2="152" class="d-egress" marker-end="url(#ahm)"/>
-
-        <!-- SG app -> db -->
-        <text x="332" y="409" text-anchor="end" class="d-sg">SG: app → db :5432</text>
-
-        <!-- db tier -->
-        <rect x="24" y="418" width="182" height="130" rx="4" class="d-subnet"/>
-        <rect x="214" y="418" width="182" height="130" rx="4" class="d-subnet"/>
-        <text x="32" y="433" class="d-lab">private db</text>
-        <text x="222" y="433" class="d-lab">private db</text>
-        <rect x="48" y="448" width="148" height="70" rx="5" class="d-box-ghost"/>
-        <text x="122" y="479" text-anchor="middle" class="d-s">no standby</text>
-        <text x="122" y="496" text-anchor="middle" class="d-s">single-AZ lab</text>
-        <rect x="224" y="448" width="148" height="70" rx="5" class="d-box"/>
-        <text x="298" y="470" text-anchor="middle" class="d-t">RDS Postgres</text>
-        <text x="298" y="487" text-anchor="middle" class="d-s">db.t4g.micro</text>
-        <text x="298" y="505" text-anchor="middle" class="d-s">KMS · not public</text>
-
-        <line x1="340" y1="308" x2="340" y2="446" class="d-line" marker-end="url(#ah)"/>
-
-        <!-- vpc / az labels -->
-        <text x="24" y="573" class="d-lab">VPC</text>
-        <text x="115" y="573" text-anchor="middle" class="d-lab">AZ a</text>
-        <text x="305" y="573" text-anchor="middle" class="d-lab">AZ b</text>
-
-        <!-- regional services -->
-        <text x="14" y="608" class="d-lab">AWS APIs outside the VPC</text>
-        <rect x="14" y="618" width="126" height="48" rx="5" class="d-box"/>
-        <text x="77" y="638" text-anchor="middle" class="d-t">SSM</text>
-        <text x="77" y="655" text-anchor="middle" class="d-s">via fck-nat</text>
-        <rect x="147" y="618" width="126" height="48" rx="5" class="d-box"/>
-        <text x="210" y="638" text-anchor="middle" class="d-t">Secrets Manager</text>
-        <text x="210" y="655" text-anchor="middle" class="d-s">via fck-nat</text>
-        <rect x="280" y="618" width="126" height="48" rx="5" class="d-box"/>
-        <text x="343" y="638" text-anchor="middle" class="d-t">CloudWatch</text>
-        <text x="343" y="655" text-anchor="middle" class="d-s">via fck-nat</text>
-        <rect x="14" y="674" width="192" height="48" rx="5" class="d-box"/>
-        <text x="110" y="694" text-anchor="middle" class="d-t">S3</text>
-        <text x="110" y="711" text-anchor="middle" class="d-s">gateway endpoint, no NAT</text>
-        <rect x="214" y="674" width="192" height="48" rx="5" class="d-box"/>
-        <text x="310" y="694" text-anchor="middle" class="d-t">KMS</text>
-        <text x="310" y="711" text-anchor="middle" class="d-s">RDS · EBS · state bucket</text>
-      </svg>
-      <figcaption class="cap">Solid arrows are the only allowed request paths, each enforced by a security group that references the tier above it, not a CIDR. Dashed arrows are egress through the single fck-nat instance.</figcaption>
-    </figure>
-
-    <ul class="notes">
-      <li><b>Inbound</b><span>Only the ALB is reachable from the internet. The app security group accepts connections from the ALB security group and nothing else.</span></li>
-      <li><b>Compute</b><span>An Auto Scaling group of 2 to 4 <code>t4g.small</code> instances in private subnets, with <code>health_check_type = "ELB"</code> and target tracking on <code>ALBRequestCountPerTarget</code>.</span></li>
-      <li><b>Data</b><span>Private Postgres, <code>publicly_accessible = false</code>, port 5432 open only to the app security group. RDS manages the master secret in Secrets Manager, so no password sits in state or tfvars.</span></li>
-      <li><b>Egress</b><span>One fck-nat instance and an S3 gateway endpoint. Packages are baked into the AMI at build time, so the fleet barely needs the internet.</span></li>
-      <li><b>Access</b><span><code>aws ssm start-session</code>, authenticated by IAM and logged. No security group opens port 22.</span></li>
-      <li><b>Signals</b><span>The CloudWatch agent ships app logs plus memory and disk metrics, with its config pulled from Parameter Store at boot. Alarms on target 5xx, unhealthy hosts, p95 latency and RDS CPU and storage go to SNS email.</span></li>
+    <h2>What's left</h2>
+    <ul class="dots">
+      <li><strong>The app and the image build.</strong> A small API with <code>/healthz</code>, <code>/readyz</code> and <code>/version</code>, and a Packer + Ansible build that bakes it into an arm64 AMI over Session Manager, with no SSH even at build time.</li>
+      <li><strong>Measured timings.</strong> Instance warmup and deregistration delay are placeholders. I'll measure boot and drain times and set them from data.</li>
+      <li><strong>Failure drills.</strong> The most important one is a release built to fail, to prove the alarm actually rolls the fleet back to the old image. Results go in a runbook per drill, published as measured, including when they fall short.</li>
     </ul>
-  </div>
-</section>
 
-<!-- RELEASE FLOW -->
-<section class="band" id="release" aria-labelledby="h-release">
-  <div class="rail">
-    <div class="eyebrow">Delivery</div>
-    <h2 id="h-release">Release flow</h2>
-    <p>A release is a commit that changes one AMI ID. Everything after the approved merge is automatic, including the rollback.</p>
-  </div>
-  <div class="flow">
-    <div>
-      <ol class="steps">
-        <li>
-          <span class="actor">developer</span>
-          <h3>Commit to <code>app/</code> or <code>packer/</code></h3>
-          <p>The change triggers <code>ami.yml</code>.</p>
-        </li>
-        <li>
-          <span class="actor">GitHub Actions · OIDC → ami-builder role</span>
-          <h3>Packer and Ansible bake a golden AMI</h3>
-          <p>Amazon Linux 2023 on arm64. Packer connects through SSM Session Manager (<code>ssh_interface = "session_manager"</code>), so even the build opens no port 22. The AMI is tagged with the git SHA, app version and build date.</p>
-        </li>
-        <li>
-          <span class="actor">GitHub Actions</span>
-          <h3>A pull request bumps <code>ami_id</code></h3>
-          <p>One line in <code>envs/lab/lab.tfvars</code>. The release is now a reviewable diff.</p>
-        </li>
-        <li>
-          <span class="actor">terraform.yml · OIDC → read-only plan role</span>
-          <h3>Checks and plan on the pull request</h3>
-          <p><code>fmt -check</code>, <code>validate</code>, <code>tflint</code>, <code>trivy config</code>, then <code>terraform plan</code>. The plan is posted as a PR comment. The plan role cannot change anything.</p>
-        </li>
-        <li>
-          <span class="actor">reviewer · GitHub Environment</span>
-          <h3>Approved apply from <code>main</code></h3>
-          <p>A required reviewer gates the job. The apply role trusts only jobs in this repository's <code>lab</code> GitHub Environment, matched on the OIDC <code>sub</code> claim.</p>
-        </li>
-        <li class="key">
-          <span class="actor">scripts/rollout.sh · AWS Auto Scaling</span>
-          <h3>Instance refresh replaces the fleet</h3>
-          <p>Terraform only creates the new launch template version. The rollout script then starts a rolling refresh with that version as the desired configuration, minimum healthy at 100% and maximum at 200%. New instances pass <code>/healthz</code> before old ones are removed, and the ALB's deregistration delay matches the app's graceful shutdown on SIGTERM.</p>
-        </li>
-      </ol>
-      <div class="outcomes">
-        <div class="outcome ok">
-          <div class="o-label">Healthy</div>
-          <h4>Refresh completes</h4>
-          <p>Old instances drain and terminate. <code>/version</code> reports the new SHA and AMI ID.</p>
-        </div>
-        <div class="outcome bad">
-          <div class="o-label">Alarm fires</div>
-          <h4>Auto-rollback</h4>
-          <p>Target 5xx or <code>UnHealthyHostCount</code> breaches during the refresh. Auto Scaling returns to the previous launch template without a human, and the CI job fails so the bump gets reverted.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="side">
-      <div>
-        <h3>Rollback is <code>git revert</code></h3>
-        <p>The AMI ID lives in a committed tfvars file, not a data-source lookup. Reverting the bump commit sends the previous image back through the same plan, approval and refresh.</p>
-<pre class="code"><span class="c"># envs/lab/lab.tfvars, after git revert</span>
-<span class="del">- ami_id = "ami-&lt;new build&gt;"</span>
-<span class="add">+ ami_id = "ami-&lt;previous build&gt;"</span></pre>
-      </div>
-      <div>
-        <h3>What minimum healthy 100% means</h3>
-        <p>Capacity never drops below the desired count during a release. Maximum healthy at 200% gives the refresh room to launch first. The price is briefly running extra instances.</p>
-        <div class="phases" role="img" aria-label="Instance refresh phases for a fleet of two: two v1 instances; two new v2 instances launch and warm up alongside them; v1 instances drain once v2 is healthy; two v2 instances remain.">
-          <div class="phase">
-            <div class="p-name">Before</div>
-            <div class="p-boxes"><div class="p-row"><span class="inst">v1</span><span class="inst">v1</span></div><div class="p-row"></div></div>
-            <p>Desired capacity in service.</p>
-          </div>
-          <div class="phase">
-            <div class="p-name">Launch</div>
-            <div class="p-boxes"><div class="p-row"><span class="inst">v1</span><span class="inst">v1</span></div><div class="p-row"><span class="inst v2 warm">v2</span><span class="inst v2 warm">v2</span></div></div>
-            <p>New AMI warms up beside the old.</p>
-          </div>
-          <div class="phase">
-            <div class="p-name">Drain</div>
-            <div class="p-boxes"><div class="p-row"><span class="inst drain">v1</span><span class="inst drain">v1</span></div><div class="p-row"><span class="inst v2">v2</span><span class="inst v2">v2</span></div></div>
-            <p>Healthy v2 takes requests; v1 deregisters.</p>
-          </div>
-          <div class="phase">
-            <div class="p-name">After</div>
-            <div class="p-boxes"><div class="p-row"></div><div class="p-row"><span class="inst v2">v2</span><span class="inst v2">v2</span></div></div>
-            <p>Fleet runs the new image only.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- DECISIONS -->
-<section class="band" id="decisions" aria-labelledby="h-dec">
-  <div class="rail">
-    <div class="eyebrow">Trade-offs</div>
-    <h2 id="h-dec">Design decisions</h2>
-    <p>Each choice, why it was made, and what it costs.</p>
-  </div>
-  <div class="cards">
-    <article class="card">
-      <h3>Immutable images instead of patching in place</h3>
-      <dl>
-        <div><dt>Why</dt><dd>No configuration drift between instances. Rollback is a previous AMI, not an undo script, and what was tested is exactly what runs.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">Every change, even a one-line config edit, costs an image build and a fleet refresh.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>A shallow ALB health check</h3>
-      <dl>
-        <div><dt>Why</dt><dd>If <code>/healthz</code> checked the database, one DB blip would mark every instance unhealthy and the ASG would terminate a healthy fleet. The deep check lives in <code>/readyz</code> and in alarms, not in replacement decisions.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">An instance that cannot reach the database stays in service. Alarms catch it instead of the health check.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>Minimum healthy at 100% during refresh</h3>
-      <dl>
-        <div><dt>Why</dt><dd>New capacity launches before old capacity is removed, so a release never shrinks the fleet below its desired size.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">Extra instances run briefly, and the refresh takes longer than a terminate-first rollout.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>SSM Session Manager instead of a bastion</h3>
-      <dl>
-        <div><dt>Why</dt><dd>Nothing listens on the network. Access is authenticated by IAM and logged, and there are no SSH keys to rotate.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">Access depends on the SSM agent and an egress path. If fck-nat is down, so is the shell.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>The AMI ID in a tfvars commit</h3>
-      <dl>
-        <div><dt>Why</dt><dd>A data-source lookup of the latest AMI would change the fleet without a diff. A committed ID makes every fleet change a reviewed diff, and rollback is <code>git revert</code>.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">One extra pull request per image build, opened by CI.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>The rollout runs outside Terraform</h3>
-      <dl>
-        <div><dt>Why</dt><dd>AWS rolls a failed refresh back to the configuration saved on the group before the refresh started. Terraform's <code>instance_refresh</code> saves the new version first, so its rollback would redeploy the bad AMI. Terraform ignores the group's launch template, and a script starts the refresh with the new version as the desired configuration.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">Terraform state no longer shows which version the fleet runs. The group itself, and the CI log, are the record.</dd></div>
-      </dl>
-    </article>
-    <article class="card">
-      <h3>Separate plan and apply roles over OIDC</h3>
-      <dl>
-        <div><dt>Why</dt><dd>Code in a pull request can read but never change infrastructure. The apply role trusts only the reviewer-gated <code>lab</code> environment, and there are no AWS keys stored in GitHub.</dd></div>
-        <div><dt>Trade-off</dt><dd class="trade">Two IAM roles and their trust policies to keep in step as the stack grows.</dd></div>
-      </dl>
-    </article>
-  </div>
-</section>
-
-<!-- SECURITY -->
-<section class="band" id="security" aria-labelledby="h-sec">
-  <div class="rail">
-    <div class="eyebrow">Controls</div>
-    <h2 id="h-sec">Security posture</h2>
-    <p>No inbound admin path, no long-lived credentials, and every secret scoped to one ARN.</p>
-  </div>
-  <div>
-    <table class="controls">
-      <tbody>
-        <tr><th scope="row">No SSH, bastion or key pair</th><td>No security group opens port 22, the launch template sets no key pair, and the sshd service is disabled in the image. Operators and Packer builds both use SSM.</td></tr>
-        <tr><th scope="row">IMDSv2 required</th><td>Set on the launch template, so instance credentials are only available through session-token requests.</td></tr>
-        <tr><th scope="row">Security-group chain</th><td>ALB → app → DB, each rule referencing the previous security group rather than a CIDR range. RDS is not publicly accessible.</td></tr>
-        <tr><th scope="row">Per-secret IAM</th><td>The instance profile has <code>AmazonSSMManagedInstanceCore</code>, CloudWatch publish, and <code>secretsmanager:GetSecretValue</code> on the one DB secret ARN only.</td></tr>
-        <tr><th scope="row">No static CI keys</th><td>GitHub Actions assumes roles through OIDC. The plan role is read-only; the apply role trusts only the <code>lab</code> GitHub Environment, which requires a reviewer.</td></tr>
-        <tr><th scope="row">Encrypted state and data</th><td>State bucket with versioning, KMS encryption, public access blocked and native S3 locking. RDS encrypted with its own KMS key; gp3 root volumes encrypted.</td></tr>
-        <tr><th scope="row">Scanned before plan</th><td><code>tflint</code> and <code>trivy config</code> run on every pull request.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- DRILLS -->
-<section class="band" id="drills" aria-labelledby="h-drills">
-  <div class="rail">
-    <div class="eyebrow">Evidence</div>
-    <h2 id="h-drills">Verification drills</h2>
-    <p>Six failure drills. Each gets a runbook: symptom, detection, action, result.</p>
-  </div>
-  <div>
-    <div class="drill-meta">
-      <span><strong id="drill-count">0 of 6</strong> drills measured</span>
-      <span>Results below are filled in only from real runs.</span>
-    </div>
-    <div class="drills" id="drill-list" aria-live="polite">
-      <noscript><p style="padding-block:16px">Drill results render with JavaScript. The <code>runbooks/</code> folder in the repository holds the same results.</p></noscript>
-    </div>
-    <p class="honesty">Results are published as measured, including when they fall short of the target. Where a first run failed, the runbook records how the problem was found and fixed.</p>
-  </div>
-</section>
-
-<!-- COST -->
-<section class="band" id="cost" aria-labelledby="h-cost">
-  <div class="rail">
-    <div class="eyebrow">Spend</div>
-    <h2 id="h-cost">Cost decisions</h2>
-    <p>Sized to cost about $2 a day while running, and nothing between sessions.</p>
-  </div>
-  <div class="cost-grid">
-    <div>
-      <div class="table-scroll">
-        <table class="tbl">
-          <thead><tr><th scope="col">While running</th><th scope="col" style="text-align:right">Approx. per hour</th></tr></thead>
-          <tbody>
-            <tr><td>ALB</td><td class="num">~$0.0225 + LCU</td></tr>
-            <tr><td>2 × EC2 t4g.small</td><td class="num">~$0.034</td></tr>
-            <tr><td>RDS db.t4g.micro</td><td class="num">~$0.016</td></tr>
-            <tr><td>fck-nat t4g.nano</td><td class="num">~$0.004</td></tr>
-          </tbody>
-          <tfoot><tr><td>Total while up</td><td class="num">~$2 / day</td></tr></tfoot>
-        </table>
-      </div>
-      <p class="tbl-note">Approximate on-demand figures used for planning, not a bill.</p>
-    </div>
-    <ul class="ticks">
-      <li><strong>fck-nat instead of a managed NAT Gateway.</strong> A NAT Gateway costs roughly $32 a month idle. One <code>t4g.nano</code> covers a fleet that barely needs egress.</li>
-      <li><strong>No interface endpoints.</strong> SSM interface endpoints in two AZs would add roughly $7 a month each per AZ. An S3 gateway endpoint is free and covers S3.</li>
-      <li><strong>Destroy between sessions.</strong> <code>terraform destroy</code> on <code>envs/lab</code> at the end of each session; only <code>bootstrap/</code> (state bucket, OIDC provider, CI roles) stays up.</li>
-      <li><strong>Budget alert first.</strong> An AWS Budget alert at $10 a month exists before the first apply. Old AMIs are deregistered and their snapshots deleted, keeping the last three.</li>
+    <h2>What production would add</h2>
+    <p>This is a lab, and some gaps are on purpose to keep it cheap. Before real traffic I'd close them:</p>
+    <ul class="dots">
+      <li><strong>Multi-AZ RDS.</strong> The database is single-AZ with one day of backups.</li>
+      <li><strong>Egress in every AZ.</strong> One NAT instance is a single point of failure. Production gets a NAT Gateway or VPC endpoints per AZ.</li>
+      <li><strong>AWS WAF on the ALB.</strong></li>
+      <li><strong>Cross-region copies</strong> of AMIs and snapshots.</li>
     </ul>
-  </div>
-</section>
 
-<!-- PRODUCTION -->
-<section class="band" id="production" aria-labelledby="h-prod">
-  <div class="rail">
-    <div class="eyebrow">Scope</div>
-    <h2 id="h-prod">What production would add</h2>
-    <p>This is a lab. These are the deliberate gaps, and what closes each one.</p>
-  </div>
-  <div class="table-scroll">
-    <table class="prod">
-      <thead><tr><th scope="col">In this lab</th><th scope="col">For production</th></tr></thead>
-      <tbody>
-        <tr><td>Single-AZ RDS, no standby</td><td>Multi-AZ RDS</td></tr>
-        <tr><td>One fck-nat instance, no interface endpoints</td><td>A NAT Gateway or VPC endpoints in each AZ</td></tr>
-        <tr><td>ALB without a web application firewall</td><td>AWS WAF on the ALB</td></tr>
-        <tr><td>Short automated backup retention</td><td>Longer backup retention</td></tr>
-        <tr><td>AMIs and snapshots in one region</td><td>Cross-region copies of AMIs and snapshots</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- REPO -->
-<section class="band" id="repo" aria-labelledby="h-repo">
-  <div class="rail">
-    <div class="eyebrow">Code</div>
-    <h2 id="h-repo">Repository layout</h2>
-    <p>Three reusable Terraform modules, versioned with git tags and called by <code>?ref=</code>.</p>
-  </div>
-  <div class="repo">
-<pre class="code">immutable-ec2-web-tier/
-├── app/            <span class="c"># tiny API + systemd unit</span>
-├── packer/
-│   ├── golden.pkr.hcl
-│   └── ansible/    <span class="c"># app, cloudwatch-agent, hardening</span>
-├── terraform/
-│   ├── bootstrap/  <span class="c"># state bucket, OIDC, CI roles</span>
-│   ├── modules/
-│   │   ├── vpc/
-│   │   ├── alb-asg/
-│   │   └── rds/
-│   └── envs/lab/   <span class="c"># ami_id in lab.tfvars</span>
-├── loadtest/       <span class="c"># k6 rollout script</span>
-├── runbooks/       <span class="c"># one per drill</span>
-└── .github/workflows/
-    ├── terraform.yml
-    └── ami.yml</pre>
-    <ul class="notes">
-      <li><b>vpc</b><span>Three subnet tiers in two AZs, fck-nat, S3 gateway endpoint.</span></li>
-      <li><b>alb-asg</b><span>ALB, target group, launch template, ASG, scaling policy, instance refresh and alarms.</span></li>
-      <li><b>rds</b><span>Subnet group, instance, KMS key, managed master secret.</span></li>
-      <li><b>State</b><span>S3 backend with native locking (<code>use_lockfile = true</code>, Terraform 1.10 or later), so no DynamoDB lock table.</span></li>
-      <li><b>App</b><span><code>/healthz</code> (shallow), <code>/readyz</code> (checks the DB), <code>/version</code> (git SHA and AMI ID) and <code>/items</code> for real data to restore.</span></li>
-    </ul>
-  </div>
-</section>
-
+  </div></div>
 </main>
 
 <footer>
-  <div class="name">Talha Imtiaz<span>DevOps Engineer</span></div>
-  <nav aria-label="Profiles">
-    <a href="https://github.com/talhaimtiaz09/immutable-ec2-web-tier">Repository</a>
-    <a href="https://talhaimtiaz.me">talhaimtiaz.me</a>
-    <a href="https://github.com/talhaimtiaz09">GitHub</a>
-    <a href="https://linkedin.com/in/talha-imtiaz342">LinkedIn</a>
-  </nav>
-  <p class="fine">Personal project. A lab environment built to be destroyed and rebuilt.</p>
+  <div class="wrap">
+    <span>Talha Imtiaz · DevOps Engineer</span>
+    <ul>
+      <li><a href="https://github.com/talhaimtiaz09/immutable-ec2-web-tier">Repository</a></li>
+      <li><a href="https://talhaimtiaz.me">talhaimtiaz.me</a></li>
+      <li><a href="https://github.com/talhaimtiaz09">GitHub</a></li>
+      <li><a href="https://linkedin.com/in/talha-imtiaz342">LinkedIn</a></li>
+    </ul>
+  </div>
 </footer>
 
-</div>
-
-<script>
-/* ==========================================================================
-   VERIFICATION DRILL RESULTS: the only place to edit.
-
-   Every result is null until it has been measured in a real run. To publish
-   one, replace null with a short string of what was observed, for example
-     result: "<what you measured>",
-     measuredOn: "YYYY-MM-DD",
-     runbook: "https://github.com/talhaimtiaz09/immutable-ec2-web-tier/blob/main/runbooks/<file>.md",
-   Use a full https:// link for runbook; relative paths do not resolve from
-   GitHub Pages. Never fill in a value that was not measured. Publish worse-
-   than-target results too.
-   ========================================================================== */
-const DRILLS = [
-  {
-    name: "Zero-downtime rollout",
-    scenario: "Run k6 at steady load, merge an AMI bump, and let instance refresh replace the fleet.",
-    measures: "Failed requests and 5xx during the rollout; refresh duration; the /version flip visible in k6 output.",
-    target: "No failed requests while the fleet is replaced.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  },
-  {
-    name: "Bad AMI auto-rollback",
-    scenario: "Ship an AMI where the app fails /healthz or returns 500s.",
-    measures: "Whether the alarm triggered rollback without a human; time from deploy to fleet restored.",
-    target: "Rollback with no human action.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  },
-  {
-    name: "Instance loss",
-    scenario: "Terminate an instance from the console mid-load.",
-    measures: "Time until the ASG has a healthy replacement in service; 5xx during the gap.",
-    target: "Healthy capacity restored by the ASG on its own.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  },
-  {
-    name: "Database restore",
-    scenario: "Point-in-time restore RDS to a new instance, point the app at it, and check /items.",
-    measures: "Restore duration end to end; data verified up to the restore point.",
-    target: "/items data intact up to the restore point.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  },
-  {
-    name: "No way in",
-    scenario: "Try SSH to an instance from the internet and from inside the VPC.",
-    measures: "Whether the SSH connection times out (no route, no listener) while ssm start-session works.",
-    target: "SSH times out; SSM session opens.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  },
-  {
-    name: "Least privilege",
-    scenario: "From an instance, try to read a different secret.",
-    measures: "The AccessDenied error itself, not just the policy that should cause it.",
-    target: "AccessDenied returned.",
-    result: null,
-    measuredOn: null,
-    runbook: null
-  }
-];
-/* ======================= end of editable data ============================ */
-
-(function renderDrills() {
-  var list = document.getElementById("drill-list");
-  if (!list) return;
-
-  function el(tag, cls, text) {
-    var n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
-  }
-  function filled(v) { return typeof v === "string" && v.trim() !== ""; }
-
-  var measured = 0;
-  DRILLS.forEach(function (d, i) {
-    var row = el("article", "drill");
-
-    row.appendChild(el("div", "num", String(i + 1).padStart(2, "0")));
-
-    var main = el("div", "main");
-    main.appendChild(el("h3", null, d.name));
-    main.appendChild(el("p", "scen", d.scenario));
-    row.appendChild(main);
-
-    var meas = el("div", "meas");
-    meas.appendChild(el("span", "lbl", "Measures"));
-    meas.appendChild(el("p", null, d.measures));
-    if (filled(d.target)) {
-      var pass = el("div", "pass");
-      pass.appendChild(el("span", "lbl", "Target"));
-      pass.appendChild(el("p", null, d.target));
-      meas.appendChild(pass);
-    }
-    row.appendChild(meas);
-
-    var res = el("div", "res");
-    res.appendChild(el("span", "lbl", "Result"));
-    if (filled(d.result)) {
-      measured++;
-      res.appendChild(el("p", "result-measured", d.result));
-      if (filled(d.measuredOn)) res.appendChild(el("span", "result-date", "Measured " + d.measuredOn));
-    } else {
-      res.appendChild(el("span", "result-pending", "Pending"));
-      res.appendChild(el("span", "result-note", "Not yet measured"));
-    }
-    if (filled(d.runbook) && /^https:\/\//.test(d.runbook)) {
-      var a = el("a", "runbook-link", "Runbook →");
-      a.href = d.runbook;
-      res.appendChild(a);
-    }
-    row.appendChild(res);
-
-    list.appendChild(row);
-  });
-
-  var total = DRILLS.length;
-  var count = document.getElementById("drill-count");
-  if (count) count.textContent = measured + " of " + total;
-  var heroStatus = document.getElementById("hero-status");
-  var heroDot = document.getElementById("hero-dot");
-  if (heroStatus) {
-    heroStatus.textContent = measured === 0
-      ? total + " failure drills planned; none measured yet"
-      : measured + " of " + total + " failure drills measured";
-  }
-  if (heroDot && measured === total) heroDot.classList.add("done");
-})();
-</script>
 </body>
 </html>
