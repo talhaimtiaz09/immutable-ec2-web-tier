@@ -1,0 +1,25 @@
+#!/bin/bash
+# Rendered by Terraform (modules/alb-asg). Runtime wiring only: the app, its
+# systemd unit and the CloudWatch agent are baked into the golden AMI.
+# No secret values here. The app reads the credentials from Secrets Manager
+# at startup using the instance role.
+set -euo pipefail
+
+install -d -m 0755 /etc/app
+cat > /etc/app/app.env <<'ENV'
+AWS_REGION=${region}
+APP_PORT=${app_port}
+APP_AMI_ID=${ami_id}
+DB_HOST=${db_host}
+DB_PORT=${db_port}
+DB_NAME=${db_name}
+DB_SECRET_ARN=${db_secret_arn}
+ENV
+chmod 0644 /etc/app/app.env
+
+# Agent config lives in SSM Parameter Store, so changing it doesn't need a new AMI.
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s -c "ssm:${cw_agent_parameter}"
+
+systemctl enable "${app_service_name}"
+systemctl restart "${app_service_name}"

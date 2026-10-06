@@ -1,0 +1,34 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+# The spec keeps the reviewed ami_id in envs/lab/lab.tfvars: ami.yml bumps it in
+# a PR and rollback is `git revert`. It holds no secrets, so it is committed.
+!terraform/envs/lab/lab.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+*.tfplan
+plan.txt
+
+# Cloud credentials and keys
+.aws/
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# Local tooling and editors
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/

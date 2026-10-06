@@ -1,0 +1,23 @@
+# Copy to lab.tfvars and COMMIT it (the root .gitignore makes an exception for
+# envs/lab/lab.tfvars). The ami.yml workflow bumps ami_id here in a PR, so each
+# rollout is a reviewed diff and rollback is `git revert`. No secrets belong in
+# this file: the DB password is managed by RDS in Secrets Manager.
+
+# Golden AMI from the Packer build (arm64, owned by this account).
+ami_id = "ami-0123456789abcdef0"
+
+# Alarm email. Prefer the ALARM_EMAIL repository variable (CI exports it as
+# TF_VAR_alarm_email) so the address isn't committed to a public repo. Set it
+# here only for local runs, and keep it out of the committed copy.
+# alarm_email = "you@example.com"
+
+# Sizing and rollout tuning. Measure boot and drain times in drill 1, then set.
+# instance_type        = "t4g.small"
+# asg_min_size         = 2
+# asg_max_size         = 4
+# instance_warmup      = 120
+# deregistration_delay = 30
+
+# Optional HTTPS (needs a public Route 53 zone for the domain).
+# domain_name      = "lab.example.com"
+# hosted_zone_name = "lab.example.com"
